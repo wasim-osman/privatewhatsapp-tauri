@@ -1,0 +1,85 @@
+name: build-test-all
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: macos
+          - os: windows-latest
+            artifact: windows
+          - os: ubuntu-latest
+            artifact: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --locked
+
+      - name: Build release
+        run: cargo tauri build
+
+      - name: Smoke test (app runs + heartbeat)
+        shell: bash
+        run: |
+          set -e
+          LOG="$(mktemp /tmp/pw-log.XXXXXX)"
+          export PW_LOG_PATH="$LOG"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BIN="target/release/privatewhatsapp.exe"
+          else
+            BIN="target/release/privatewhatsapp"
+          fi
+          echo "Launching $BIN with PW_LOG_PATH=$LOG"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            timeout 50 xvfb-run -a "$BIN" >/tmp/pw-stdout.log 2>&1 &
+          else
+            timeout 50 "$BIN" >/tmp/pw-stdout.log 2>&1 &
+          fi
+          PID=$!
+          sleep 45
+          kill "$PID" 2>/dev/null || true
+          echo "--- app log:"
+          cat "$LOG"
+          grep -q "page heartbeat received" "$LOG"
+          grep -q "window built ok" "$LOG"
+          echo "SMOKE PASSED"
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.artifact }}
+          path: |
+            target/release/bundle/**/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          draft: true
