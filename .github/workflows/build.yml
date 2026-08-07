@@ -22,6 +22,8 @@ jobs:
             artifact: linux
             package-glob: 'target/release/bundle/appimage/* target/release/bundle/deb/* target/release/bundle/rpm/*'
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
