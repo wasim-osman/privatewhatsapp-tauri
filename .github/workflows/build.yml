@@ -50,7 +50,7 @@ jobs:
           fi
           echo "Launching $BIN with PW_LOG_PATH=$LOG"
           if [ "$RUNNER_OS" = "Linux" ]; then
-            WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 pw-log-file="$LOG" xvfb-run -a "$BIN" >/tmp/pw-stdout.log 2>&1 &
+            WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a "$BIN" >/tmp/pw-stdout.log 2>&1 &
           else
             "$BIN" >/tmp/pw-stdout.log 2>&1 &
           fi

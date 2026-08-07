@@ -69,4 +69,45 @@
   }
   if (document.body) watchCallMenu();
   else document.addEventListener('DOMContentLoaded', watchCallMenu);
+
+  function norm(s) { return (s || '').replace(/\\s+/g, ' ').trim(); }
+  function isReadMoreEl(el) {
+    var n = norm(el && el.textContent);
+    if (!n || n.length > 6) return false;
+    return /^read\\s?more$/i.test(n) || /^see\\s?more$/i.test(n);
+  }
+  function msgContainer(node) {
+    var el = node;
+    for (var g = 0; el && g < 20; g++, el = el.parentElement) {
+      if (el.getAttribute && el.getAttribute('data-testid') === 'msg-container') return el;
+      var c = (el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className) || '';
+      if (/message-in|message-out/.test(String(c))) return el;
+    }
+    return node.closest ? node.closest('[data-testid="msg-container"]') : null;
+  }
+  function expandReadMore(container) {
+    if (!container) return;
+    var els = container.querySelectorAll('div,span,p,section');
+    for (var i = 0; i < els.length; i++) {
+      var st; try { st = getComputedStyle(els[i]); } catch (e) { continue; }
+      if (st.display === '-webkit-box') { els[i].style.display = 'block'; }
+      if (st.webkitLineClamp && st.webkitLineClamp !== 'none') { els[i].style.webkitLineClamp = 'unset'; }
+      if (st.overflow === 'hidden' || st.overflow === 'clip') { els[i].style.overflow = 'visible'; }
+      if (st.maxHeight && st.maxHeight !== 'none') { els[i].style.maxHeight = 'none'; }
+    }
+    var labels = container.querySelectorAll('div,span');
+    for (var j = 0; j < labels.length; j++) {
+      var t = norm(labels[j].textContent);
+      if (t.length <= 5 && (/^read\\s?more$/i.test(t) || /^see\\s?more$/i.test(t))) {
+        labels[j].style.display = 'none';
+      }
+    }
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    for (var k = 0, p = t; k < 5 && p; k++, p = p.parentElement) {
+      if (isReadMoreEl(p)) { expandReadMore(msgContainer(p)); break; }
+    }
+  }, true);
 })();
