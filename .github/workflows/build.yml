@@ -14,10 +14,13 @@ jobs:
         include:
           - os: macos-latest
             artifact: macos
+            package-glob: 'target/release/bundle/dmg/*.dmg'
           - os: windows-latest
             artifact: windows
+            package-glob: 'target/release/bundle/nsis/* target/release/bundle/msi/*'
           - os: ubuntu-latest
             artifact: linux
+            package-glob: 'target/release/bundle/appimage/* target/release/bundle/deb/* target/release/bundle/rpm/*'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +65,6 @@ jobs:
           cat "$LOG"
           echo "--- app stdout/stderr:"
           cat /tmp/pw-stdout.log 2>/dev/null || true
-          cat "$LOG"
           grep -q "page heartbeat received" "$LOG"
           grep -q "window built ok" "$LOG"
           echo "SMOKE PASSED"
@@ -71,21 +73,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bundles-${{ matrix.artifact }}
+          if-no-files-found: error
           path: |
             target/release/bundle/**/*
-          if-no-files-found: error
 
-  release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
+      - name: Stage packages
+        shell: bash
+        run: |
+          mkdir -p dist-stage
+          cp ${{ matrix.package-glob }} dist-stage/ 2>/dev/null || true
+          ls -la dist-stage/
+
+      - name: Upload packages to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
         with:
-          path: artifacts
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*
-          draft: true
+          files: dist-stage/*
