@@ -50,13 +50,14 @@ jobs:
           fi
           echo "Launching $BIN with PW_LOG_PATH=$LOG"
           if [ "$RUNNER_OS" = "Linux" ]; then
-            timeout 50 xvfb-run -a "$BIN" >/tmp/pw-stdout.log 2>&1 &
+            xvfb-run -a "$BIN" >/tmp/pw-stdout.log 2>&1 &
           else
-            timeout 50 "$BIN" >/tmp/pw-stdout.log 2>&1 &
+            "$BIN" >/tmp/pw-stdout.log 2>&1 &
           fi
           PID=$!
           sleep 45
           kill "$PID" 2>/dev/null || true
+          pkill -f privatewhatsapp 2>/dev/null || true
           echo "--- app log:"
           cat "$LOG"
           grep -q "page heartbeat received" "$LOG"
