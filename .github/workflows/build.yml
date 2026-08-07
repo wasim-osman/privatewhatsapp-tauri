@@ -50,7 +50,7 @@ jobs:
           fi
           echo "Launching $BIN with PW_LOG_PATH=$LOG"
           if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a "$BIN" >/tmp/pw-stdout.log 2>&1 &
+            WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 pw-log-file="$LOG" xvfb-run -a "$BIN" >/tmp/pw-stdout.log 2>&1 &
           else
             "$BIN" >/tmp/pw-stdout.log 2>&1 &
           fi
@@ -59,6 +59,9 @@ jobs:
           kill "$PID" 2>/dev/null || true
           pkill -f privatewhatsapp 2>/dev/null || true
           echo "--- app log:"
+          cat "$LOG"
+          echo "--- app stdout/stderr:"
+          cat /tmp/pw-stdout.log 2>/dev/null || true
           cat "$LOG"
           grep -q "page heartbeat received" "$LOG"
           grep -q "window built ok" "$LOG"

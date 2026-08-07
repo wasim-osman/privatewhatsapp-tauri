@@ -61,6 +61,9 @@ fn log_file() -> std::path::PathBuf {
     if let Ok(p) = std::env::var("PW_LOG_PATH") {
         return std::path::PathBuf::from(p);
     }
+    if let Ok(p) = std::env::var("pw_log_file") {
+        return std::path::PathBuf::from(p);
+    }
     std::env::temp_dir().join("privatewhatsapp.log")
 }
 
@@ -146,7 +149,10 @@ fn main() {
                 builder = builder.data_directory(dir);
             }
 
-            let _window = builder.build().expect("failed to build window");
+            let _window = builder.build().unwrap_or_else(|e| {
+                debug_log(&handle, &format!("FAIL window build: {e}"));
+                std::process::exit(1);
+            });
             debug_log(&handle, "window built ok");
 
             // A smoke marker that the page (WhatsApp) actually loaded and the
