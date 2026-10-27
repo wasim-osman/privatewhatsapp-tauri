@@ -1,0 +1,6 @@
+{
+  "name": "privatewhatsapp-script-tests",
+  "private": true,
+  "scripts": { "test": "node scripts.test.js" },
+  "devDependencies": { "fake-indexeddb": "^6.0.0", "jsdom": "^26.0.0" }
+}

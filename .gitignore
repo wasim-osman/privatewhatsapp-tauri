@@ -4,3 +4,4 @@ dist/*.js
 *.log
 .DS_Store
 /gen
+node_modules/

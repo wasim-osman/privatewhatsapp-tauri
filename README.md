@@ -34,6 +34,7 @@ A native menu bar is installed on the main window:
 | Cut / Copy / Paste / Select All | `⌘X` / `⌘C` / `⌘V` / `⌘A` |
 | Reload (custom handler) | `⌘R` |
 | Fullscreen | platform default (`⌃⌘F` on macOS) |
+| Minimize / Zoom / Close Window | `⌘M` / – / `⌘W` |
 
 Edit-menu items use Tauri's `PredefinedMenuItem` so their accelerators route to
 the platform's responder chain (i.e. Copy/Paste reach the WhatsApp text field).
@@ -63,11 +64,15 @@ For a release build: `cargo tauri build`.
 
 - The window loads `https://web.whatsapp.com` directly;
   `initialization_script` runs before `window.onload` on every navigation.
+- `--ephemeral` data dir is deleted on quit.
+- Retention pruning resumes from the last scanned key each batch (the store is
+  keyed by id, not time), and never creates a missing database.
 - Page -> Rust uses Tauri **events** (heartbeat, debug). No commands are
   exposed to the remote page; the capability grants only `core:event:allow-emit`
   so the security surface stays small.
 - Watchdog: Rust thread reloads the window if no heartbeat arrives for 60s
-  (mirrors the macOS dead-page recovery). Window, relaunch, side panel banner
+  (mirrors the macOS dead-page recovery); the clock restarts on each reload, so
+  it reloads at most once a minute. Window, relaunch, side panel banner
   handled natively per-platform in later iterations.
 - The incoming-call banner is DOM-based (works everywhere) instead of a native
   overlay.
@@ -80,4 +85,13 @@ For a release build: `cargo tauri build`.
   done with an AppContainer or WDAC policy.
 - Linux: needs `webkit2gtk-4.1` dev packages; distribute as Flatpak with only
   `--socket=network` for a sandbox.
-- Icons: add `src-tauri/icons/` (run `tauri icon app-source.png`).
+- Icons: live in `icons/` (regenerate with `tauri icon app-source.png`).
+
+## Tests
+
+```sh
+cd tests && npm install && npm test
+```
+
+Runs the injected scripts in jsdom (promo hiding, call-UI hiding, Read more,
+call banner, heartbeat) and the retention pruner against fake-indexeddb.

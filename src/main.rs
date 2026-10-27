@@ -11,6 +11,7 @@ use tauri::{AppHandle, Listener, Manager, WebviewUrl, WebviewWindowBuilder};
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15";
 const HOME_URL: &str = "https://web.whatsapp.com";
 
+const MAX_LOG_BYTES: u64 = 1024 * 1024;
 const HEARTBEAT_POLL: Duration = Duration::from_secs(10);
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -54,14 +55,19 @@ fn injection_bundle(opts: &Options) -> String {
 }
 
 fn now_stamp() -> String {
-    format!("{:?}", std::time::SystemTime::now())
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("{:02}:{:02}:{:02}Z", (secs / 3600) % 24, (secs / 60) % 60, secs % 60)
+}
+
+fn ephemeral_dir() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("pw-ephemeral-{}", std::process::id()))
 }
 
 fn log_file() -> std::path::PathBuf {
     if let Ok(p) = std::env::var("PW_LOG_PATH") {
-        return std::path::PathBuf::from(p);
-    }
-    if let Ok(p) = std::env::var("pw_log_file") {
         return std::path::PathBuf::from(p);
     }
     std::env::temp_dir().join("privatewhatsapp.log")
@@ -72,6 +78,11 @@ fn debug_log(_app: &AppHandle, text: &str) {
     if let Some(dir) = file.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
+    // keep the log bounded: start over once it passes 1 MiB
+    if std::fs::metadata(&file).map(|m| m.len() > MAX_LOG_BYTES).unwrap_or(false) {
+        let _ = std::fs::remove_file(&file);
+    }
+    let text: String = text.chars().take(4096).collect();
     let line = format!("[{}] {}\n", now_stamp(), text);
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&file) {
         let _ = f.write_all(line.as_bytes());
@@ -89,6 +100,8 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let fullscreen = tauri::menu::PredefinedMenuItem::fullscreen(app, None)?;
 
     let app_menu = SubmenuBuilder::new(app, "PrivateWhatsapp")
+        .about(None)
+        .separator()
         .hide()
         .hide_others()
         .show_all()
@@ -111,11 +124,19 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         .item(&fullscreen)
         .build()?;
 
-    Menu::with_items(app, &[&app_menu, &edit, &view])
+    let window = SubmenuBuilder::new(app, "Window")
+        .minimize()
+        .maximize()
+        .separator()
+        .close_window()
+        .build()?;
+
+    Menu::with_items(app, &[&app_menu, &edit, &view, &window])
 }
 
 fn main() {
     let opts = parse_options();
+    let ephemeral = opts.ephemeral;
 
     tauri::Builder::default()
         .setup(move |app| {
@@ -144,7 +165,7 @@ fn main() {
             .initialization_script(&injection_bundle(&o));
 
             if o.ephemeral {
-                let dir = std::env::temp_dir().join(format!("pw-ephemeral-{}", std::process::id()));
+                let dir = ephemeral_dir();
                 let _ = std::fs::create_dir_all(&dir);
                 builder = builder.data_directory(dir);
             }
@@ -207,6 +228,10 @@ fn main() {
                 let stale = hb.last.lock().map(|l| l.elapsed() > HEARTBEAT_TIMEOUT).unwrap_or(true);
                 if stale {
                     debug_log(&h, "watchdog: heartbeat stale, reloading");
+                    // restart the clock so a slow load isn't reloaded again every poll
+                    if let Ok(mut last) = hb.last.lock() {
+                        *last = Instant::now();
+                    }
                     if let Some(win) = h.get_webview_window("main") {
                         let _ = win.reload();
                     }
@@ -217,5 +242,11 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error building PrivateWhatsapp")
-        .run(|_app, _event| {});
+        .run(move |_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if ephemeral {
+                    let _ = std::fs::remove_dir_all(ephemeral_dir());
+                }
+            }
+        });
 }

@@ -5,7 +5,9 @@
     '[data-testid="call-audio"]',
     '[data-testid="call-video"]',
     '[data-testid="video-call"]',
-    '#main [aria-label*="call" i]',
+    '#main [aria-label~="call" i]',
+    '#main [aria-label^="Voice call" i]',
+    '#main [aria-label^="Video call" i]',
     '[aria-label="Meta AI"]'
   ].join(',') + '{display:none !important;visibility:hidden !important;pointer-events:none !important;}';
   var style = document.createElement('style');
@@ -27,17 +29,23 @@
       if (el.style && el.style.display === 'none') continue;
       if (el.children.length > 12) continue;
       var t = el.textContent || '';
-      if (!matches(t)) continue;
+      if (t.length >= 200 || !matches(t)) continue;
+      // widen to the promo's own wrapper, but never past it into real app UI
       var parent = el.parentElement;
-      while (parent && parent !== document.body && matches(parent.textContent || '') && (parent.textContent || '').length < 200) {
+      while (parent && parent !== document.body && parent.id !== 'app' &&
+             !parent.querySelector('#pane-side, #main') &&
+             matches(parent.textContent || '') &&
+             (parent.textContent || '').length <= (el.textContent || '').length + 40) {
         el = parent;
         parent = el.parentElement;
       }
+      if (el.id === 'app' || el.querySelector('#pane-side, #main')) continue;
       el.style.display = 'none';
     }
   }
   hideTextPromo();
   setTimeout(hideTextPromo, 5000);
+  setTimeout(hideTextPromo, 15000);
 
   var MENU_ITEMS = ['Send call link', 'New group call'];
 
@@ -64,17 +72,22 @@
     hideCallMenuItems();
     var target = document.body;
     if (!target) return;
-    var mo = new MutationObserver(function () { hideCallMenuItems(); });
+    var pending = false;
+    var mo = new MutationObserver(function () {
+      if (pending) return;
+      pending = true;
+      setTimeout(function () { pending = false; hideCallMenuItems(); }, 150);
+    });
     mo.observe(target, { childList: true, subtree: true, attributes: true, attributeFilter: ['role'] });
   }
   if (document.body) watchCallMenu();
   else document.addEventListener('DOMContentLoaded', watchCallMenu);
 
-  function norm(s) { return (s || '').replace(/\\s+/g, ' ').trim(); }
+  function norm(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
   function isReadMoreEl(el) {
     var n = norm(el && el.textContent);
-    if (!n || n.length > 6) return false;
-    return /^read\\s?more$/i.test(n) || /^see\\s?more$/i.test(n);
+    if (!n || n.length > 12) return false;
+    return /^read\s?more$/i.test(n) || /^see\s?more$/i.test(n);
   }
   function msgContainer(node) {
     var el = node;
@@ -98,7 +111,7 @@
     var labels = container.querySelectorAll('div,span');
     for (var j = 0; j < labels.length; j++) {
       var t = norm(labels[j].textContent);
-      if (t.length <= 5 && (/^read\\s?more$/i.test(t) || /^see\\s?more$/i.test(t))) {
+      if (t.length <= 12 && (/^read\s?more$/i.test(t) || /^see\s?more$/i.test(t))) {
         labels[j].style.display = 'none';
       }
     }

@@ -17,6 +17,7 @@
         href: location.href,
         bodyLen: document.body ? document.body.innerHTML.length : -1,
         app: !!document.querySelector('#app'),
+        appVisible: (function () { var a = document.querySelector('#app'); return a ? (getComputedStyle(a).display !== 'none' && a.offsetHeight > 0) : false; })(),
         chatList: !!pane,
         chatListVisible: pane ? getComputedStyle(pane).display !== 'none' : false,
         mainVisible: main ? getComputedStyle(main).display !== 'none' : false,
@@ -26,6 +27,7 @@
     } catch (e) {}
   }
   dump('start');
-  window.addEventListener('load', function () { setTimeout(function () { dump('load+3s'); }, 3000); });
+  window.addEventListener('load', function () { setTimeout(function () { dump('load+3s'); }, 3000);
+    setTimeout(function () { dump('load+20s'); }, 20000); });
   setInterval(function () { dump('tick'); }, 60000);
 })();
