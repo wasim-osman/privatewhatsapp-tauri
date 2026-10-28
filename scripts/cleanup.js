@@ -14,7 +14,7 @@
   style.textContent = css;
   (document.head || document.documentElement).appendChild(style);
 
-  var RES = [/get whatsapp for (mac|windows)/i];
+  var RES = [/(get|download) whatsapp for (mac|windows)/i];
   var TAGS = 'div,h1,h2,h3,h4,a,button,span,header,section,p';
 
   function matches(s) {

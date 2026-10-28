@@ -2,7 +2,7 @@
 const {JSDOM}=require('jsdom'); const fs=require('fs'); const assert=require('assert');
 const P=require('path').join(__dirname,'..','scripts')+'/';
 function mk(html){ const d=new JSDOM(html,{runScripts:'outside-only',pretendToBeVisual:true}); return d; }
-const APP=`<body><div id="app"><div><div class="banner">Get WhatsApp for Mac<button>x</button></div><div id="pane-side">chats</div><div id="main"><span aria-label="Voice call">v</span><span aria-label="Video call">c</span><span aria-label="Search">s</span><span aria-label="Typically fine">t</span><span aria-label="Call">c2</span><div id="msg" data-testid="msg-container"><div style="display:-webkit-box;overflow:hidden">long text<span id="rm">Read more</span></div></div></div></div></div></body>`;
+const APP=`<body><div id="app"><div><div class="banner">Get WhatsApp for Mac<button>x</button></div><div id="dl"><div class="card"><b>Download WhatsApp for Mac</b><p>Make calls and get a faster experience when you download the Mac app.</p><button>Download</button></div><div id="login">Scan to log in. Scan the QR code with your phone camera, tap the link to open WhatsApp, then scan the QR code again to link to your account. Scan the QR code with your phone camera, tap the link to open WhatsApp, then scan the QR code again to link to your account. </div></div><div id="pane-side">chats</div><div id="main"><span aria-label="Voice call">v</span><span aria-label="Video call">c</span><span aria-label="Search">s</span><span aria-label="Typically fine">t</span><span aria-label="Call">c2</span><div id="msg" data-testid="msg-container"><div style="display:-webkit-box;overflow:hidden">long text<span id="rm">Read more</span></div></div></div></div></div></body>`;
 async function cleanup(file,clk){
   const d=mk(APP); d.window.eval(fs.readFileSync(file,'utf8'));
   return d;
@@ -12,6 +12,8 @@ async function cleanup(file,clk){
  assert.notStrictEqual(D.getElementById('app').style.display,'none','app hidden!');
  assert.strictEqual(D.getElementById('pane-side').style.display,'');
  assert.strictEqual(D.querySelector('.banner').style.display,'none','promo not hidden');
+ assert.strictEqual(D.querySelector('.card').style.display,'none','Download promo not hidden');
+ assert.strictEqual(D.getElementById('login').style.display,'','login hidden!');
  // call labels via CSS rule present; typically not matched
  const css=D.querySelector('style').textContent;
  assert(css.includes('~="call"') && !css.includes('*="call"'));
