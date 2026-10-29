@@ -95,3 +95,11 @@ cd tests && npm install && npm test
 
 Runs the injected scripts in jsdom (promo hiding, call-UI hiding, Read more,
 call banner, heartbeat) and the retention pruner against fake-indexeddb.
+
+## Portable builds (Releases)
+
+- **Windows:** `PrivateWhatsapp-portable-windows-x64.zip` — unzip anywhere and run
+  `PrivateWhatsapp.exe`. Data is kept in `PrivateWhatsapp-data` next to the exe
+  (because `portable.txt` is present; delete it to use the normal user profile).
+  Needs the WebView2 runtime (included with Windows 10/11).
+- **Linux:** `PrivateWhatsapp_*_amd64.AppImage` — `chmod +x` and run; no install.

@@ -62,6 +62,17 @@ fn now_stamp() -> String {
     format!("{:02}:{:02}:{:02}Z", (secs / 3600) % 24, (secs / 60) % 60, secs % 60)
 }
 
+/// Portable mode: if a `portable.txt` file sits next to the executable, keep all
+/// webview data in `PrivateWhatsapp-data` beside it instead of the user profile.
+fn portable_data_dir() -> Option<std::path::PathBuf> {
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    if exe_dir.join("portable.txt").is_file() {
+        Some(exe_dir.join("PrivateWhatsapp-data"))
+    } else {
+        None
+    }
+}
+
 fn ephemeral_dir() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("pw-ephemeral-{}", std::process::id()))
 }
@@ -166,6 +177,9 @@ fn main() {
 
             if o.ephemeral {
                 let dir = ephemeral_dir();
+                let _ = std::fs::create_dir_all(&dir);
+                builder = builder.data_directory(dir);
+            } else if let Some(dir) = portable_data_dir() {
                 let _ = std::fs::create_dir_all(&dir);
                 builder = builder.data_directory(dir);
             }

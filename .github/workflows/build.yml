@@ -84,6 +84,13 @@ jobs:
         run: |
           mkdir -p dist-stage
           cp ${{ matrix.package-glob }} dist-stage/ 2>/dev/null || true
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # portable build: exe + portable.txt (keeps data beside the exe); needs WebView2 (built into Win10/11)
+            mkdir -p portable/PrivateWhatsapp
+            cp target/release/privatewhatsapp.exe portable/PrivateWhatsapp/PrivateWhatsapp.exe
+            echo "Portable mode: webview data is stored in PrivateWhatsapp-data next to the exe. Delete this file to use the normal user profile instead." > portable/PrivateWhatsapp/portable.txt
+            (cd portable && 7z a -tzip ../dist-stage/PrivateWhatsapp-portable-windows-x64.zip PrivateWhatsapp >/dev/null)
+          fi
           ls -la dist-stage/
 
       - name: Upload packages to release
