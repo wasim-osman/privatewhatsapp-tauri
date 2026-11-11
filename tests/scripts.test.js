@@ -69,5 +69,19 @@ async function cleanup(file,clk){
  // missing DB must not be created
  const dbs=await fdb.indexedDB.databases(); assert(!dbs.find(x=>x.name==='user-data'),'user-data created!');
  console.log('retention OK');
+ // session.js: login-state transitions
+ const sd=new JSDOM('<body></body>',{url:'https://web.whatsapp.com/',runScripts:'outside-only',pretendToBeVisual:true});
+ const sw=sd.window; const sev=[]; sw.__TAURI__={event:{emit:(e,p)=>sev.push([e,JSON.parse(p)])}};
+ const realSI=sw.setInterval.bind(sw); sw.setInterval=(f,ms,...a)=>realSI(f,Math.min(ms,40),...a);
+ sw.eval(fs.readFileSync(P+'bridge.js','utf8')+fs.readFileSync(P+'session.js','utf8'));
+ await new Promise(r=>setTimeout(r,150));
+ sw.localStorage.setItem('WAUnknownID','x'); sw.localStorage.setItem('last-wid-md','SECRET');
+ await new Promise(r=>setTimeout(r,150));
+ sw.localStorage.removeItem('last-wid-md');
+ await new Promise(r=>setTimeout(r,150));
+ const reasons=sev.filter(x=>x[0]==='session').map(x=>x[1].reason+':'+x[1].loggedIn).filter(x=>!x.startsWith('periodic'));
+ assert.deepStrictEqual(reasons.filter(r=>/^(start|login|LOGOUT):/.test(r)),['start:false','login:true','LOGOUT:false']);
+ assert(!JSON.stringify(sev).includes('SECRET'),'leaked a localStorage value');
+ console.log('session OK');
  process.exit(0);
 })().catch(e=>{console.error('FAIL',e);process.exit(1)});

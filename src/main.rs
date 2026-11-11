@@ -44,6 +44,7 @@ fn injection_bundle(opts: &Options) -> String {
         bundle.push_str(include_str!("../scripts/heartbeat.js"));
         bundle.push_str(include_str!("../scripts/cleanup.js"));
         bundle.push_str(include_str!("../scripts/callstate.js"));
+        bundle.push_str(include_str!("../scripts/session.js"));
         if !opts.no_retention {
             bundle.push_str(include_str!("../scripts/retention.js"));
         }
@@ -52,6 +53,24 @@ fn injection_bundle(opts: &Options) -> String {
         bundle.push_str(include_str!("../scripts/debug.js"));
     }
     bundle
+}
+
+fn today_stamp() -> String {
+    // civil date from days since the epoch (UTC)
+    let days = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| (d.as_secs() / 86400) as i64)
+        .unwrap_or(0);
+    let z = days + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z.rem_euclid(146097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 fn now_stamp() -> String {
@@ -77,15 +96,22 @@ fn ephemeral_dir() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("pw-ephemeral-{}", std::process::id()))
 }
 
-fn log_file() -> std::path::PathBuf {
+/// Persistent log location (macOS: ~/Library/Logs/io.private.whatsapp). The temp
+/// dir is only a fallback: macOS purges it, which loses the history we need to
+/// diagnose logouts.
+fn log_dir(app: &AppHandle) -> std::path::PathBuf {
+    app.path().app_log_dir().unwrap_or_else(|_| std::env::temp_dir())
+}
+
+fn log_file(app: &AppHandle) -> std::path::PathBuf {
     if let Ok(p) = std::env::var("PW_LOG_PATH") {
         return std::path::PathBuf::from(p);
     }
-    std::env::temp_dir().join("privatewhatsapp.log")
+    log_dir(app).join("privatewhatsapp.log")
 }
 
-fn debug_log(_app: &AppHandle, text: &str) {
-    let file = log_file();
+fn debug_log(app: &AppHandle, text: &str) {
+    let file = log_file(app);
     if let Some(dir) = file.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
@@ -94,7 +120,7 @@ fn debug_log(_app: &AppHandle, text: &str) {
         let _ = std::fs::remove_file(&file);
     }
     let text: String = text.chars().take(4096).collect();
-    let line = format!("[{}] {}\n", now_stamp(), text);
+    let line = format!("[{} {}] {}\n", today_stamp(), now_stamp(), text);
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&file) {
         let _ = f.write_all(line.as_bytes());
     }
@@ -190,6 +216,29 @@ fn main() {
             });
             debug_log(&handle, "window built ok");
 
+            // Unclean-exit detection: the marker is removed on a normal exit, so
+            // finding it at startup means the last run was killed/crashed (or is
+            // still running, i.e. two instances sharing one data store).
+            let marker = log_dir(&handle).join("running.pid");
+            if let Ok(prev) = std::fs::read_to_string(&marker) {
+                debug_log(
+                    &handle,
+                    &format!("startup: previous run (pid {}) did not exit cleanly, or is still running", prev.trim()),
+                );
+            }
+            let _ = std::fs::create_dir_all(log_dir(&handle));
+            let _ = std::fs::write(&marker, std::process::id().to_string());
+            debug_log(
+                &handle,
+                &format!(
+                    "startup: v{} pid {} ephemeral={} portable={}",
+                    env!("CARGO_PKG_VERSION"),
+                    std::process::id(),
+                    o.ephemeral,
+                    portable_data_dir().is_some()
+                ),
+            );
+
             // A smoke marker that the page (WhatsApp) actually loaded and the
             // injected scripts are running: toggled only via the heartbeat
             // event raised by heartbeat.js. Used by the automated CI test.
@@ -228,6 +277,14 @@ fn main() {
                 });
             }
 
+            {
+                // always-on, small: login-state transitions from session.js
+                let h = handle.clone();
+                handle.listen("session", move |event| {
+                    debug_log(&h, &format!("session {}", event.payload()));
+                });
+            }
+
             if o.debug {
                 let h = handle.clone();
                 handle.listen("debug", move |event| {
@@ -256,11 +313,15 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error building PrivateWhatsapp")
-        .run(move |_app, event| {
-            if let tauri::RunEvent::Exit = event {
+        .run(move |app, event| match event {
+            tauri::RunEvent::ExitRequested { .. } => debug_log(app, "exit requested"),
+            tauri::RunEvent::Exit => {
+                let _ = std::fs::remove_file(log_dir(app).join("running.pid"));
+                debug_log(app, "exit clean");
                 if ephemeral {
                     let _ = std::fs::remove_dir_all(ephemeral_dir());
                 }
             }
+            _ => {}
         });
 }

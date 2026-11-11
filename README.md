@@ -103,3 +103,13 @@ call banner, heartbeat) and the retention pruner against fake-indexeddb.
   (because `portable.txt` is present; delete it to use the normal user profile).
   Needs the WebView2 runtime (included with Windows 10/11).
 - **Linux:** `PrivateWhatsapp_*_amd64.AppImage` — `chmod +x` and run; no install.
+
+
+## Diagnosing "it keeps asking for the QR code"
+
+The app keeps a persistent log (macOS: `~/Library/Logs/io.private.whatsapp/privatewhatsapp.log`;
+override with `PW_LOG_PATH`). Each launch records whether the previous run exited
+cleanly, and `scripts/session.js` records login-state changes (`start` / `login` /
+`LOGOUT`, plus sleep gaps, visibility and network state) without ever logging
+stored values. When a logout happens, the lines just before `LOGOUT` show what
+the app was doing.

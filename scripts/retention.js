@@ -34,6 +34,16 @@
     var db = null;
     var done = 0;
     var resumeKey = null; // continue after the last scanned key, so each batch makes progress
+    var known = [];       // databases that really exist (version > 0)
+
+    // indexedDB.open() on a missing name creates a stub database inside
+    // WhatsApp's origin, so only ever open names we have seen listed.
+    function exists(name) {
+      for (var i = 0; i < known.length; i++) {
+        if (known[i].name === name && known[i].version > 0) return true;
+      }
+      return false;
+    }
 
     function finish() {
       if (db) { try { db.close(); } catch (e) {} db = null; }
@@ -43,6 +53,7 @@
     function nextDB() {
       if (index >= DBS.length) { finish(); return; }
       var name = DBS[index++];
+      if (!exists(name)) { nextDB(); return; }
       done = 0;
       resumeKey = null;
       var open;
@@ -105,7 +116,9 @@
       };
     }
 
-    setTimeout(nextDB, 0);
+    try {
+      indexedDB.databases().then(function (list) { known = list || []; nextDB(); }, finish);
+    } catch (e) { finish(); }
   }
 
   setTimeout(prune, 300000);
